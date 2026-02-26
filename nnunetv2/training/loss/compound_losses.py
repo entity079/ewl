@@ -226,6 +226,6 @@ class DC_EWL_and_CE_loss(nn.Module):
         if isinstance(ew_loss, torch.Tensor):
             ew_loss = torch.nan_to_num(ew_loss, nan=0.0, posinf=1e3, neginf=0.0)
 
-        result = self.weight_ce * ce_loss + self.weight_dice * dc_loss + self.weight_ew * ew_loss
+        result =  self.weight_ew * ew_loss
         result = torch.nan_to_num(result, nan=0.0, posinf=1e3, neginf=-1e3)
         return result
