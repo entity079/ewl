@@ -193,6 +193,18 @@ class DC_EWL_and_CE_loss(nn.Module):
         :return:
         """
 
+        if self.weight_ew != 0:
+            if ewtr is None:
+                raise ValueError(
+                    "EWL loss is enabled (weight_ew != 0) but ewtr is None. "
+                    "Please provide a non-empty Euclidean weight transform."
+                )
+            if isinstance(ewtr, torch.Tensor) and ewtr.numel() == 0:
+                raise ValueError(
+                    "EWL loss received an empty ewtr tensor. "
+                    "Please provide a non-empty Euclidean weight transform."
+                )
+
         if self.ignore_label is not None:
             assert target.shape[1] == 1, 'ignore label is not implemented for one hot encoded target variables ' \
                                          '(DC_and_CE_loss)'
@@ -214,7 +226,7 @@ class DC_EWL_and_CE_loss(nn.Module):
         dc_loss = self.dc(net_output, target_dice, loss_mask=mask) \
             if self.weight_dice != 0 else 0
         ew_loss = self.ew(net_output, target, ewtr, loss_mask=mask) \
-            if self.weight_ew != 0 and ewtr is not None else torch.tensor(0.0, device=net_output.device, dtype=net_output.dtype)
+            if self.weight_ew != 0 else torch.tensor(0.0, device=net_output.device, dtype=net_output.dtype)
         ce_loss = self.ce(net_output, target[:, 0]) \
             if self.weight_ce != 0 and (self.ignore_label is None or num_fg > 0) else 0
 
@@ -226,6 +238,6 @@ class DC_EWL_and_CE_loss(nn.Module):
         if isinstance(ew_loss, torch.Tensor):
             ew_loss = torch.nan_to_num(ew_loss, nan=0.0, posinf=1e3, neginf=0.0)
 
-        result = self.weight_ce * ce_loss + self.weight_dice * dc_loss + self.weight_ew * ew_loss
+        result =  self.weight_ew * ew_loss
         result = torch.nan_to_num(result, nan=0.0, posinf=1e3, neginf=-1e3)
         return result
