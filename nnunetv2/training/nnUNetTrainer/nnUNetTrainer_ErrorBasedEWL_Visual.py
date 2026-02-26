@@ -250,10 +250,10 @@ class nnUNetTrainer_ErrorBasedEWL_Visual(nnUNetTrainer):
                 # Fallback if error-based transform is not available
                 l = self.loss(output, target)
 
-            # Save mask comparisons only in epoch 1 and final epoch to reduce IO/memory overhead
+            # Save mask comparisons in epoch 10 and final epoch to reduce IO/memory overhead
             batch_idx = self._global_train_batch_counter
-            is_first_epoch = self.current_epoch == 0
-            should_save_first = is_first_epoch and batch_idx % self._save_visualizations_every_n_batches == 0
+            is_tenth_epoch = self.current_epoch == 9
+            should_save_first = is_tenth_epoch and batch_idx % self._save_visualizations_every_n_batches == 0
             should_save_final = self._is_final_epoch and batch_idx % self._save_visualizations_every_n_batches == 0
             if should_save_first or should_save_final:
                 self._save_mask_comparison(
