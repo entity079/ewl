@@ -1,3 +1,4 @@
+
 import numpy as np
 import torch
 import os
@@ -57,6 +58,7 @@ class nnUNetTrainer_EWL_Optimized(nnUNetTrainer):
                 weights[-1] = 0
             weights = weights / weights.sum()
             loss = DeepSupervisionWrapper(loss, weights)
+        self.print_to_log_file(f"loss is {loss}", also_print_to_console=True, add_timestamp=False)
 
         return loss
 

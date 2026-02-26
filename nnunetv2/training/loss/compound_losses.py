@@ -193,17 +193,11 @@ class DC_EWL_and_CE_loss(nn.Module):
         :return:
         """
 
-        if self.weight_ew != 0:
-            if ewtr is None:
-                raise ValueError(
-                    "EWL loss is enabled (weight_ew != 0) but ewtr is None. "
-                    "Please provide a non-empty Euclidean weight transform."
-                )
-            if isinstance(ewtr, torch.Tensor) and ewtr.numel() == 0:
-                raise ValueError(
-                    "EWL loss received an empty ewtr tensor. "
-                    "Please provide a non-empty Euclidean weight transform."
-                )
+        if isinstance(ewtr, torch.Tensor) and ewtr.numel() == 0:
+            raise ValueError(
+                "EWL loss received an empty ewtr tensor. "
+                "Please provide a non-empty Euclidean weight transform."
+            )
 
         if self.ignore_label is not None:
             assert target.shape[1] == 1, 'ignore label is not implemented for one hot encoded target variables ' \
