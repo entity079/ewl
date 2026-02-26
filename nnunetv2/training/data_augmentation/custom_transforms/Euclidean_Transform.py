@@ -75,25 +75,31 @@ class EuclideanTransform(BasicTransform):
             tensor = tensor.detach().cpu().numpy()
         else:
             tensor = np.asarray(tensor)
-        shape =  tensor.shape
-        batch_size = shape[0]
-        image_size = np.prod(shape[1:])
-        transformed_tensor = np.zeros((shape[0], self.num_classes) + shape[1:], dtype=np.float32)
+        if tensor.ndim < 2:
+            raise RuntimeError(f"EuclideanTransform expected at least 2D segmentation, got shape {tensor.shape}")
 
-        for b in range(batch_size):
-            for c in range(self.num_classes):
-                bin_tensor = (tensor[b]==c).astype(np.float32)
-                if bin_tensor.any():
-                    fg_sum = np.sum(bin_tensor)
-                    imbalance = (image_size / fg_sum)
-                    imbalance = min(imbalance, 100.0)  # Cap imbalance to prevent extreme values
-                    transformed_tensor[b, c] = self._transform(bin_tensor) * imbalance
-                else :
-                    pass
-        
+        # Transforms are applied per sample in this pipeline. Segmentation usually arrives as [C, H, W(, D)]
+        # with C=1 label channel. Use channel 0 as label map to build class-wise Euclidean weights [K, H, W(, D)].
+        if tensor.ndim >= 3:
+            seg_map = tensor[0]
+        else:
+            seg_map = tensor
+
+        spatial_shape = seg_map.shape
+        image_size = np.prod(spatial_shape)
+        transformed_tensor = np.zeros((self.num_classes, *spatial_shape), dtype=np.float32)
+
+        for c in range(self.num_classes):
+            bin_tensor = (seg_map == c).astype(np.float32)
+            if bin_tensor.any():
+                fg_sum = np.sum(bin_tensor)
+                imbalance = (image_size / fg_sum)
+                imbalance = min(imbalance, 100.0)  # Cap imbalance to prevent extreme values
+                transformed_tensor[c] = self._transform(bin_tensor) * imbalance
+
         # Add nan handling
         transformed_tensor = np.nan_to_num(transformed_tensor, nan=0.0)
-        
-        data_dict["ewtr"] = torch.from_numpy(transformed_tensor) # A modified dictionary is to be returned
+
+        data_dict["ewtr"] = torch.from_numpy(transformed_tensor)  # [num_classes, H, W(, D)]
 
         return data_dict
