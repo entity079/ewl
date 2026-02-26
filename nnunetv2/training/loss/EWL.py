@@ -187,9 +187,18 @@ class Euclidean_Weighted_Loss(nn.Module):
                 loss_mask = loss_mask.expand(-1, weighted_diff.shape[1], *loss_mask.shape[2:])
             weighted_diff = weighted_diff * loss_mask
 
-        # normalize by number of elements per sample to avoid exploding magnitude on large patches
+        # normalize by (fp + fn + smooth) per sample to stabilize gradients when errors get very small
+        # and avoid denominator collapse near convergence.
         axes = tuple(range(1, weighted_diff.ndim))
-        loss = weighted_diff.mean(dim=axes)
+        fp = x * (1 - y_onehot)
+        fn = (1 - x) * y_onehot
+        if loss_mask is not None:
+            fp = fp * loss_mask
+            fn = fn * loss_mask
+
+        numerator = weighted_diff.sum(dim=axes)
+        denominator = (fp.sum(dim=axes) + fn.sum(dim=axes)).clamp_min(self.smooth)
+        loss = numerator / denominator
 
         if self.ddp:
             from nnunetv2.utilities.ddp_allgather import AllGatherGrad

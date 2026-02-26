@@ -226,14 +226,6 @@ class DC_EWL_and_CE_loss(nn.Module):
         if isinstance(ew_loss, torch.Tensor):
             ew_loss = torch.nan_to_num(ew_loss, nan=0.0, posinf=1e3, neginf=0.0)
 
-        # Keep EWL on a comparable magnitude to base losses without sign instability
-        base_scale = (torch.abs(ce_loss) + torch.abs(dc_loss)).detach().clamp_min(1e-6)
-        ew_scale = torch.abs(ew_loss).detach().clamp_min(1e-6)
-        max_allowed = 2.0 * base_scale
-        ew_loss = torch.where(ew_scale > max_allowed,
-                              ew_loss * (max_allowed / ew_scale),
-                              ew_loss)
-
         result = self.weight_ce * ce_loss + self.weight_dice * dc_loss + self.weight_ew * ew_loss
         result = torch.nan_to_num(result, nan=0.0, posinf=1e3, neginf=-1e3)
         return result

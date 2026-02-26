@@ -31,7 +31,9 @@ class nnUNetTrainer_ErrorBasedEWL_Visual(nnUNetTrainer):
         self._error_transform = None
         self._is_final_epoch = False
         self._saved_samples = 0
-        self._max_samples_to_save = 50  # Limit number of samples to save
+        self._max_samples_to_save = 10  # Limit number of samples to save
+        self._save_visualizations_every_n_batches = 10
+        self._global_train_batch_counter = 0
 
     def _build_loss(self):
         if self.label_manager.has_regions:
@@ -199,6 +201,7 @@ class nnUNetTrainer_ErrorBasedEWL_Visual(nnUNetTrainer):
         """
         Override to handle error-based Euclidean transforms and save masks in final epoch
         """
+        self._global_train_batch_counter += 1
         data = batch['data']
         target = batch['target']
         
@@ -247,14 +250,18 @@ class nnUNetTrainer_ErrorBasedEWL_Visual(nnUNetTrainer):
                 # Fallback if error-based transform is not available
                 l = self.loss(output, target)
 
-            # Save mask comparisons in final epoch
-            if self._is_final_epoch and self.current_epoch % 10 == 0:  # Save every 10 batches in final epoch
+            # Save mask comparisons only in epoch 1 and final epoch to reduce IO/memory overhead
+            batch_idx = self._global_train_batch_counter
+            is_first_epoch = self.current_epoch == 0
+            should_save_first = is_first_epoch and batch_idx % self._save_visualizations_every_n_batches == 0
+            should_save_final = self._is_final_epoch and batch_idx % self._save_visualizations_every_n_batches == 0
+            if should_save_first or should_save_final:
                 self._save_mask_comparison(
                     data=data,
                     target=target,
                     prediction=pred_classes,
                     error_weights=ewtr,
-                    batch_idx=self.current_batch_index
+                    batch_idx=batch_idx
                 )
 
         if self.grad_scaler is not None:

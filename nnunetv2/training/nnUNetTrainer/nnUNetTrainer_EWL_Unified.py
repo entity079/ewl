@@ -36,13 +36,13 @@ class nnUNetTrainer_EWL_Unified(nnUNetTrainer):
         # Counter for saved visualization samples
         self._saved_samples = 0
         # Limit number of visualization samples to save (prevents storage overflow)
-        self._max_samples_to_save = 30  
+        self._max_samples_to_save = 10  
         # Flag to track if Euclidean masks have been precomputed (avoids redundant computation)
         self._euclidean_masks_precomputed = False
         self._euclidean_masks_saved = 0
 
         # Save some visualizations early so files are visible immediately during training.
-        self._save_visualizations_every_n_batches = 25
+        self._save_visualizations_every_n_batches = 10
         self._global_train_batch_counter = 0
 
         # EWL is numerically sensitive with AMP + compile on some stacks. Use safer defaults.
@@ -362,11 +362,12 @@ class nnUNetTrainer_EWL_Unified(nnUNetTrainer):
             if isinstance(l, torch.Tensor):
                 l = torch.nan_to_num(l, nan=0.0, posinf=1e3, neginf=-1e3)
 
-            # Save mask comparisons regularly so output files are visible during training
+            # Save mask comparisons only in epoch 1 and final epoch to reduce IO/memory overhead
             batch_idx = self._global_train_batch_counter
-            should_save_early = (self.current_epoch < 3 and batch_idx % self._save_visualizations_every_n_batches == 0)
-            should_save_final = self._is_final_epoch and batch_idx % 10 == 0
-            if should_save_early or should_save_final:
+            is_first_epoch = self.current_epoch == 0
+            should_save_first = is_first_epoch and batch_idx % self._save_visualizations_every_n_batches == 0
+            should_save_final = self._is_final_epoch and batch_idx % self._save_visualizations_every_n_batches == 0
+            if should_save_first or should_save_final:
                 self._save_mask_comparison(
                     data=data,
                     target=target,
