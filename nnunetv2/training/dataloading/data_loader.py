@@ -174,6 +174,7 @@ class nnUNetDataLoader(DataLoader):
         # preallocate output tensors in final patch size and write transformed samples directly
         data_all = torch.empty(self.data_shape, dtype=torch.float32)
         seg_all = None
+        ewtr_all = None
 
         with torch.no_grad():
             with threadpool_limits(limits=1, user_api=None):
@@ -205,9 +206,11 @@ class nnUNetDataLoader(DataLoader):
                         transformed = self.transforms(**{'image': data_cropped, 'segmentation': seg_cropped})
                         data_sample = transformed['image']
                         seg_sample = transformed['segmentation']
+                        ewtr_sample = transformed.get('ewtr', None)
                     else:
                         data_sample = data_cropped
                         seg_sample = seg_cropped
+                        ewtr_sample = None
 
                     data_all[j] = data_sample
 
@@ -221,7 +224,20 @@ class nnUNetDataLoader(DataLoader):
                             seg_all = torch.empty((self.batch_size, *seg_sample.shape), dtype=seg_sample.dtype)
                         seg_all[j] = seg_sample
 
-        return {'data': data_all, 'target': seg_all, 'keys': selected_keys}
+                    if ewtr_sample is not None:
+                        if isinstance(ewtr_sample, list):
+                            if ewtr_all is None:
+                                ewtr_all = [torch.empty((self.batch_size, *e.shape), dtype=e.dtype) for e in ewtr_sample]
+                            for e_idx, e in enumerate(ewtr_sample):
+                                ewtr_all[e_idx][j] = e
+                        else:
+                            if ewtr_all is None:
+                                ewtr_all = torch.empty((self.batch_size, *ewtr_sample.shape), dtype=ewtr_sample.dtype)
+                            ewtr_all[j] = ewtr_sample
+
+        if ewtr_all is None:
+            return {'data': data_all, 'target': seg_all, 'keys': selected_keys}
+        return {'data': data_all, 'target': seg_all, 'ewtr': ewtr_all, 'keys': selected_keys}
 
 
 if __name__ == '__main__':

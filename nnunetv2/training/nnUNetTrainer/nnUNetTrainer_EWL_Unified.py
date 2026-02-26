@@ -155,13 +155,8 @@ class nnUNetTrainer_EWL_Unified(nnUNetTrainer):
 
                 # Apply Euclidean transform
                 data_dict = {'seg': gt_mask}
-                try:
-                    transformed = self._euclidean_transform(**data_dict)
-                    ewtr = transformed['ewtr']
-                except TypeError:
-                    # Fallback to calling apply method directly
-                    transformed = self._euclidean_transform.apply(data_dict)
-                    ewtr = transformed['ewtr']
+                transformed = self._euclidean_transform(**data_dict)
+                ewtr = transformed['ewtr']
                 if isinstance(ewtr, torch.Tensor):
                     ewtr = ewtr.detach().cpu().numpy()
 
@@ -319,11 +314,19 @@ class nnUNetTrainer_EWL_Unified(nnUNetTrainer):
         else:
             target = target.to(self.device, non_blocking=True)
 
-        if ewtr is not None:
-            if isinstance(ewtr, list):
-                ewtr = [i.to(self.device, non_blocking=True) for i in ewtr]
-            else:
-                ewtr = ewtr.to(self.device, non_blocking=True)
+        if ewtr is None:
+            raise ValueError(
+                "Batch is missing 'ewtr'. Please ensure the dataloader propagates ewtr from EuclideanTransform "
+                "and do not use ones-like fallback."
+            )
+        if isinstance(ewtr, (list, tuple)):
+            ewtr = [i.to(self.device, non_blocking=True) for i in ewtr]
+            if any((isinstance(i, torch.Tensor) and i.numel() == 0) for i in ewtr):
+                raise ValueError("Batch contains an empty ewtr tensor in deep supervision levels.")
+        else:
+            ewtr = ewtr.to(self.device, non_blocking=True)
+            if isinstance(ewtr, torch.Tensor) and ewtr.numel() == 0:
+                raise ValueError("Batch contains an empty ewtr tensor.")
 
         self.optimizer.zero_grad(set_to_none=True)
 
@@ -340,21 +343,17 @@ class nnUNetTrainer_EWL_Unified(nnUNetTrainer):
             # Handle deep supervision case where all arguments need to be tuples
             if isinstance(output, (list, tuple)):
                 # Deep supervision is enabled - output and target are tuples
-                if ewtr is not None:
-                    if isinstance(ewtr, (list, tuple)):
-                        ewtr_levels = list(ewtr)
-                        if len(ewtr_levels) < len(output):
-                            ewtr_levels += [None] * (len(output) - len(ewtr_levels))
-                        ewtr_levels = tuple(ewtr_levels[:len(output)])
-                        l = self.loss(output, target, ewtr_levels)
-                    else:
-                        # Use Euclidean weights only at highest resolution.
-                        # Lower-resolution DS heads receive None to avoid shape mismatches and instability.
-                        ewtr_levels = (ewtr,) + (None,) * (len(output) - 1)
-                        l = self.loss(output, target, ewtr_levels)
+                if isinstance(ewtr, (list, tuple)):
+                    ewtr_levels = list(ewtr)
+                    if len(ewtr_levels) < len(output):
+                        ewtr_levels += [None] * (len(output) - len(ewtr_levels))
+                    ewtr_levels = tuple(ewtr_levels[:len(output)])
+                    l = self.loss(output, target, ewtr_levels)
                 else:
-                    # ewtr is None, create tuple of None for deep supervision
-                    l = self.loss(output, target, (None,) * len(output))
+                    # Use Euclidean weights only at highest resolution.
+                    # Lower-resolution DS heads receive None to avoid shape mismatches and instability.
+                    ewtr_levels = (ewtr,) + (None,) * (len(output) - 1)
+                    l = self.loss(output, target, ewtr_levels)
             else:
                 # No deep supervision - pass arguments directly
                 l = self.loss(output, target, ewtr)

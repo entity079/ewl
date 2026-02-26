@@ -206,15 +206,9 @@ class DC_EWL_and_CE_loss(nn.Module):
             # remove ignore label from target, replace with one of the known labels. It doesn't matter because we
             # ignore gradients in those areas anyway
             target_dice = torch.where(mask, target, 0)
-            if ewtr is not None:
-                target_ew = torch.where(mask, ewtr, 0)
-            else:
-                # Create dummy weights if ewtr is not provided
-                target_ew = torch.ones_like(target)
             num_fg = mask.sum()
         else:
             target_dice = target
-            target_ew = ewtr if ewtr is not None else torch.ones_like(target)
             mask = None
 
         dc_loss = self.dc(net_output, target_dice, loss_mask=mask) \
